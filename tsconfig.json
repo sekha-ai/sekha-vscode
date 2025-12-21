@@ -1,16 +1,24 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
+    "module": "Node16",
     "target": "ES2022",
-    "outDir": "out",
+    "lib": ["ES2022"],
+    "outDir": "dist",
     "rootDir": "src",
     "sourceMap": true,
     "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "moduleResolution": "node"
+    "resolveJsonModule": true,
+    "moduleResolution": "Node16",
+    "declaration": true,
+    "declarationMap": true,
+    "types": ["vscode", "node", "jest"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "out"]
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }

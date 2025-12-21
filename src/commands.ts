@@ -1,7 +1,12 @@
 import * as vscode from 'vscode';
-import { MemoryController } from '../../sekha-js-sdk/src/client';
+import { MemoryController, Conversation, SearchResult } from '@sekha/sdk';
 import { SekhaTreeDataProvider } from './treeView';
 import { WebviewProvider } from './webview';
+
+interface Message {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
 
 export class Commands {
   constructor(
@@ -34,7 +39,7 @@ export class Commands {
 
       if (!label) return;
 
-      await this.memory.create({
+      await this.memory.store({
         messages,
         label,
         folder: '/vscode',
@@ -44,7 +49,8 @@ export class Commands {
       this.treeView.refresh();
 
     } catch (error) {
-      vscode.window.showErrorMessage(`Failed to save conversation: ${error}`);
+      const message = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(`Failed to save conversation: ${message}`);
     }
   }
 
@@ -60,13 +66,14 @@ export class Commands {
       const messages = this.parseMessages(content);
       if (messages.length === 0) return;
 
-      await this.memory.create({
+      await this.memory.store({
         messages,
         label: 'Auto-saved from VS Code',
         folder: '/vscode/auto',
       });
 
     } catch (error) {
+      // Silent failure for auto-save
       console.error('Auto-save failed:', error);
     }
   }
@@ -80,30 +87,31 @@ export class Commands {
 
       if (!query) return;
 
-      const results = await this.memory.search(query);
+      const results = await this.memory.query(query);
       
       if (results.length === 0) {
         vscode.window.showInformationMessage('No results found');
         return;
       }
 
-      const items = results.map(r => ({
+      const items = results.map((r: SearchResult) => ({
         label: r.label || 'Untitled',
         description: `Score: ${(r.score * 100).toFixed(1)}%`,
-        detail: r.messages?.[0]?.content?.substring(0, 100),
-        conversation: r,
+        detail: r.content?.substring(0, 100) || '',
+        conversationId: r.conversationId,
       }));
 
       const selected = await vscode.window.showQuickPick(items, {
         placeHolder: 'Select conversation to view',
       });
 
-      if (selected?.conversation?.id) {
-        await this.viewConversation(selected.conversation.id);
+      if (selected?.conversationId) {
+        await this.viewConversation(selected.conversationId);
       }
 
     } catch (error) {
-      vscode.window.showErrorMessage(`Search failed: ${error}`);
+      const message = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(`Search failed: ${message}`);
     }
   }
 
@@ -127,21 +135,22 @@ export class Commands {
         return;
       }
 
-      await editor.edit(edit => {
+      await editor.edit((editBuilder: vscode.TextEditorEdit) => {
         const position = editor.selection.active;
-        edit.insert(position, `\n\n### Context from Sekha\n\n${context.formattedContext}\n\n`);
+        editBuilder.insert(position, `\n\n### Context from Sekha\n\n${context.formattedContext}\n\n`);
       });
 
       vscode.window.showInformationMessage('Context inserted from Sekha!');
 
     } catch (error) {
-      vscode.window.showErrorMessage(`Failed to insert context: ${error}`);
+      const message = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(`Failed to insert context: ${message}`);
     }
   }
 
   async viewConversation(id: string): Promise<void> {
     try {
-      const conversation = await this.memory.getConversation(id);
+      const conversation = await this.memory.get(id);
       
       // Create or show webview panel
       const panel = vscode.window.createWebviewPanel(
@@ -154,16 +163,20 @@ export class Commands {
       panel.webview.html = this.webview.getConversationHtml(conversation);
 
     } catch (error) {
-      vscode.window.showErrorMessage(`Failed to load conversation: ${error}`);
+      const message = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(`Failed to load conversation: ${message}`);
     }
   }
 
-  private parseMessages(content: string): Array<{ role: string; content: string }> {
-    // Simple parser - can be enhanced
-    const messages: Array<{ role: string; content: string }> = [];
+  async openSettings(): Promise<void> {
+    await vscode.commands.executeCommand('workbench.action.openSettings', 'sekha');
+  }
+
+  private parseMessages(content: string): Message[] {
+    const messages: Message[] = [];
     const lines = content.split('\n');
     
-    let currentRole: string | null = null;
+    let currentRole: 'user' | 'assistant' | 'system' | null = null;
     let currentContent: string[] = [];
     
     for (const line of lines) {
@@ -175,9 +188,8 @@ export class Commands {
             role: currentRole,
             content: currentContent.join('\n').trim(),
           });
-        }
-        
-        currentRole = trimmed.startsWith('User:') ? 'user' : 'assistant';
+        }        
+        currentRole = trimmed.startsWith('User:') ? 'user' as const : 'assistant' as const;
         currentContent = [trimmed.replace(/^(User|Assistant):\s*/, '')];
       } else if (trimmed && currentRole) {
         currentContent.push(line);

@@ -3,9 +3,11 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+package-lock.json
 
 # Build outputs
 dist/
+out/
 build/
 *.vsix
 
@@ -27,6 +29,9 @@ Thumbs.db
 # Logs
 logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Runtime data
 pids/
@@ -43,9 +48,14 @@ pids/
 # Environment variables
 .env
 .env.local
+.env.*.local
 
 # Sekha dev
 config.toml
 *.db
 *.db-shm
 *.db-wal
+
+# Temporary files
+*.tmp
+.cache/

@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
-import { MemoryController } from '@sekha/sdk';
-import { Conversation } from '@sekha/sdk';
+import { MemoryController, MemoryConfig, Conversation } from '@sekha/sdk';
 
 export class SekhaTreeDataProvider implements vscode.TreeDataProvider<SekhaTreeItem> {
   private _onDidChangeTreeData = new vscode.EventEmitter<SekhaTreeItem | undefined>();

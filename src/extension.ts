@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { MemoryController, MemoryConfig } from '../../sekha-js-sdk/src/client';
+import { MemoryController, MemoryConfig } from '@sekha/sdk';
 import { SekhaTreeDataProvider } from './treeView';
 import { Commands } from './commands';
 import { WebviewProvider } from './webview';
@@ -49,12 +49,15 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('sekha.viewConversation', (id: string) => 
       commands.viewConversation(id)
     ),
+    vscode.commands.registerCommand('sekha.openSettings', () => 
+      commands.openSettings()
+    ),
     
     // Tree view
     treeView,
     
     // Configuration watcher
-    vscode.workspace.onDidChangeConfiguration(event => {
+    vscode.workspace.onDidChangeConfiguration((event: vscode.ConfigurationChangeEvent) => {
       if (event.affectsConfiguration('sekha')) {
         vscode.commands.executeCommand('sekha.refresh');
       }
@@ -68,29 +71,31 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 function validateConfig(config: vscode.WorkspaceConfiguration): boolean {
-  const apiUrl = config.get('apiUrl');
-  const apiKey = config.get('apiKey');
+  const apiUrl = config.get<string>('apiUrl');
+  const apiKey = config.get<string>('apiKey');
   return Boolean(apiUrl && apiKey);
 }
 
 function createMemoryController(config: vscode.WorkspaceConfiguration): MemoryController {
   const apiConfig: MemoryConfig = {
-    baseURL: config.get('apiUrl', 'http://localhost:8080'),
-    apiKey: config.get('apiKey', ''),
+    baseURL: config.get<string>('apiUrl', 'http://localhost:8080'),
+    apiKey: config.get<string>('apiKey', ''),
     timeout: 30000,
   };
   
   return new MemoryController(apiConfig);
 }
 
-function setupAutoSave(config: vscode.WorkspaceConfiguration, commands: Commands) {
-  const autoSave = config.get('autoSave', false);
+function setupAutoSave(config: vscode.WorkspaceConfiguration, commands: Commands): NodeJS.Timeout | undefined {
+  const autoSave = config.get<boolean>('autoSave', false);
   if (!autoSave) return;
 
-  const intervalMs = config.get('autoSaveInterval', 5) * 60000;
+  const intervalMinutes = config.get<number>('autoSaveInterval', 5);
+  const intervalMs = intervalMinutes * 60000;
+  
   if (intervalMs <= 0) return;
 
-  setInterval(() => {
+  return setInterval(() => {
     commands.autoSaveConversation();
   }, intervalMs);
 }

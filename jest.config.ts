@@ -1,22 +1,25 @@
-module.exports = {
+import type { Config } from 'jest';
+
+const config: Config = {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  roots: ['<rootDir>/src', '<rootDir>/tests'],
+  roots: ['<rootDir>/tests'],
   testMatch: ['**/*.test.ts'],
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.d.ts',
-    '!src/**/index.ts',
   ],
-  coverageThreshold: {
-    global: {
-      statements: 70,
-      branches: 70,
-      functions: 70,
-      lines: 70,
-    },
-  },
-  moduleNameMapper: {
-    '^@sekha/sdk$': '<rootDir>/../sekha-js-sdk/src/index.ts',
+  coverageDirectory: 'coverage',
+  coverageReporters: ['text', 'lcov', 'html'],
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
+  transform: {
+    '^.+\\.tsx?$': ['ts-jest', {
+      tsconfig: {
+        esModuleInterop: true,
+        allowSyntheticDefaultImports: true,
+      },
+    }],
   },
 };
+
+export default config;

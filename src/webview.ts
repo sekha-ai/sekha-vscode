@@ -1,12 +1,17 @@
 import * as vscode from 'vscode';
 import { Conversation } from '@sekha/sdk';
 
+interface Message {
+  role: string;
+  content: string;
+}
+
 export class WebviewProvider {
   constructor(private extensionUri: vscode.Uri) {}
 
   getConversationHtml(conversation: Conversation): string {
     const messagesHtml = conversation.messages
-      .map(msg => `
+      .map((msg: Message) => `
         <div class="message ${msg.role}">
           <div class="message-header">${msg.role.toUpperCase()}</div>
           <div class="message-content">${this.escapeHtml(msg.content)}</div>
@@ -73,7 +78,7 @@ export class WebviewProvider {
           <h1 class="conversation-title">${this.escapeHtml(conversation.label)}</h1>
           <div class="conversation-meta">
             ID: ${conversation.id} | 
-            Folder: ${conversation.folder} | 
+            Folder: ${conversation.folder || 'N/A'} | 
             Status: ${conversation.status} | 
             Created: ${new Date(conversation.createdAt).toLocaleString()}
           </div>
@@ -87,8 +92,11 @@ export class WebviewProvider {
   }
 
   private escapeHtml(text: string): string {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 }

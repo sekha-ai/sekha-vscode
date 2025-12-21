@@ -2,34 +2,163 @@ name: VS Code Extension CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
+  workflow_dispatch:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: Test on Node.js ${{ matrix.node-version }}
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node-version: [18.x, 20.x]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Use Node.js
-        uses: actions/setup-node@v3
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
         with:
-          node-version: 18.x
+          node-version: ${{ matrix.node-version }}
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
+      - name: Run linter
+        run: npm run lint
+
+      - name: Run type check
+        run: npx tsc --noEmit
+
       - name: Run tests
-        run: npm test
+        run: npm test -- --ci --maxWorkers=2
+        env:
+          CI: true
+
+      - name: Build extension
+        run: npm run compile
 
       - name: Package extension
         run: npm run package
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == '20.x'
 
       - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == '20.x'
         with:
-          name: sekha-vscode
+          name: sekha-vscode-${{ github.sha }}
           path: "*.vsix"
+          retention-days: 30
+
+  lint:
+    name: Lint and Format Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+
+  package-check:
+    name: Extension Package Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and package
+        run: |
+          npm run compile
+          npm run package
+
+      - name: Verify VSIX contents
+        run: |
+          if [ -f *.vsix ]; then
+            echo "✅ VSIX package created successfully"
+            ls -lh *.vsix
+          else
+            echo "❌ VSIX package not found"
+            exit 1
+          fi
+
+      - name: Validate package.json
+        run: |
+          node -e "
+          const pkg = require('./package.json');
+          const required = ['name', 'displayName', 'version', 'publisher', 'engines', 'main'];
+          const missing = required.filter(field => !pkg[field]);
+          if (missing.length > 0) {
+            console.error('❌ Missing required fields:', missing.join(', '));
+            process.exit(1);
+          }
+          console.log('✅ package.json is valid');
+          "
+
+  status-check:
+    name: All Checks Passed
+    runs-on: ubuntu-latest
+    needs: [test, lint, security, package-check]
+    if: always()
+    
+    steps:
+      - name: Check status
+        run: |
+          if [ "${{ needs.test.result }}" != "success" ]; then
+            echo "❌ Tests failed"
+            exit 1
+          fi
+          if [ "${{ needs.lint.result }}" != "success" ]; then
+            echo "❌ Linting failed"
+            exit 1
+          fi
+          if [ "${{ needs.package-check.result }}" != "success" ]; then
+            echo "❌ Package validation failed"
+            exit 1
+          fi
+          echo "✅ All checks passed!"
