@@ -1,113 +1,102 @@
-import { jest, describe, it, expect, beforeEach } from '@jest/globals';
+import * as assert from 'assert';
+import * as sinon from 'sinon';
 import { Commands } from '../src/commands';
 import { MemoryController } from '@sekha/sdk';
 import { SekhaTreeDataProvider } from '../src/treeView';
 import { WebviewProvider } from '../src/webview';
 import * as vscode from 'vscode';
 
-// Mock VS Code API
-jest.mock('vscode', () => ({
-  window: {
-    activeTextEditor: undefined,
-    showInformationMessage: jest.fn(),
-    showWarningMessage: jest.fn(),
-    showErrorMessage: jest.fn(),
-    showInputBox: jest.fn(),
-    showQuickPick: jest.fn(),
-    createWebviewPanel: jest.fn(),
-  },
-  workspace: {
-    getConfiguration: jest.fn(),
-  },
-  ViewColumn: { One: 1 },
-}));
-
-describe('Commands', () => {
-  let mockMemory: jest.Mocked<MemoryController>;
-  let mockTreeView: jest.Mocked<SekhaTreeDataProvider>;
-  let mockWebview: jest.Mocked<WebviewProvider>;
+suite('Commands', () => {
+  let mockMemory: any;
+  let mockTreeView: any;
+  let mockWebview: any;
   let commands: Commands;
+  let sandbox: sinon.SinonSandbox;
 
-  beforeEach(() => {
+  setup(() => {
+    sandbox = sinon.createSandbox();
+
     mockMemory = {
-      create: jest.fn(),
-      getConversation: jest.fn(),
-      listConversations: jest.fn(),
-      search: jest.fn(),
-      assembleContext: jest.fn(),
-    } as any;
+      create: sandbox.stub(),
+      getConversation: sandbox.stub(),
+      listConversations: sandbox.stub(),
+      search: sandbox.stub(),
+      assembleContext: sandbox.stub(),
+    };
 
     mockTreeView = {
-      refresh: jest.fn(),
-    } as any;
+      refresh: sandbox.stub(),
+    };
 
     mockWebview = {
-      getConversationHtml: jest.fn().mockReturnValue('<html></html>'),
-    } as any;
+      getConversationHtml: sandbox.stub().returns('<html></html>'),
+    };
 
     commands = new Commands(mockMemory, mockTreeView as any, mockWebview as any);
-    jest.clearAllMocks();
   });
 
-  describe('saveConversation', () => {
-    it('should show warning when no active editor', async () => {
-      vscode.window.activeTextEditor = undefined;
+  teardown(() => {
+    sandbox.restore();
+  });
+
+  suite('saveConversation', () => {
+    test('should show warning when no active editor', async () => {
+      const showWarningStub = sandbox.stub(vscode.window, 'showWarningMessage');
+      sandbox.stub(vscode.window, 'activeTextEditor').value(undefined);
 
       await commands.saveConversation();
 
-      expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-        'No active editor to save from'
-      );
+      assert.ok(showWarningStub.calledWith('No active editor to save from'));
     });
 
-    it('should save conversation successfully', async () => {
+    test('should save conversation successfully', async () => {
       const mockEditor = {
         document: {
-          getText: jest.fn().mockReturnValue('User: Hello\nAssistant: Hi there!'),
+          getText: () => 'User: Hello\nAssistant: Hi there!',
         },
       };
-      vscode.window.activeTextEditor = mockEditor as any;
       
-      vscode.window.showInputBox = jest.fn().mockResolvedValue('Test Conversation');
-      mockMemory.create = jest.fn().mockResolvedValue({ id: '123' });
+      sandbox.stub(vscode.window, 'activeTextEditor').value(mockEditor);
+      sandbox.stub(vscode.window, 'showInputBox').resolves('Test Conversation');
+      const showInfoStub = sandbox.stub(vscode.window, 'showInformationMessage');
+      
+      mockMemory.create.resolves({ id: '123' });
 
       await commands.saveConversation();
 
-      expect(mockMemory.create).toHaveBeenCalledWith({
+      assert.ok(mockMemory.create.calledWith({
         messages: [
           { role: 'user', content: 'Hello' },
           { role: 'assistant', content: 'Hi there!' },
         ],
         label: 'Test Conversation',
         folder: '/vscode',
-      });
-      expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-        'Conversation saved to Sekha!'
-      );
+      }));
+      assert.ok(showInfoStub.calledWith('Conversation saved to Sekha!'));
     });
   });
 
-  describe('search', () => {
-    it('should handle no query', async () => {
-      vscode.window.showInputBox = jest.fn().mockResolvedValue('');
+  suite('search', () => {
+    test('should handle no query', async () => {
+      sandbox.stub(vscode.window, 'showInputBox').resolves('');
 
       await commands.search();
 
-      expect(mockMemory.search).not.toHaveBeenCalled();
+      assert.ok(mockMemory.search.notCalled);
     });
 
-    it('should search and show results', async () => {
-      vscode.window.showInputBox = jest.fn().mockResolvedValue('test query');
-      mockMemory.search = jest.fn().mockResolvedValue([
+    test('should search and show results', async () => {
+      sandbox.stub(vscode.window, 'showInputBox').resolves('test query');
+      mockMemory.search.resolves([
         { id: '123', label: 'Test', score: 0.95, messages: [] },
       ]);
       
-      vscode.window.showQuickPick = jest.fn().mockResolvedValue(null);
+      const quickPickStub = sandbox.stub(vscode.window, 'showQuickPick').resolves(undefined);
 
       await commands.search();
 
-      expect(mockMemory.search).toHaveBeenCalledWith('test query');
-      expect(vscode.window.showQuickPick).toHaveBeenCalled();
+      assert.ok(mockMemory.search.calledWith('test query'));
+      assert.ok(quickPickStub.called);
     });
   });
 });

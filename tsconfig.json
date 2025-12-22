@@ -4,7 +4,7 @@
     "target": "ES2022",
     "lib": ["ES2022"],
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": ".",
     "sourceMap": true,
     "strict": true,
     "noImplicitAny": true,
@@ -17,8 +17,8 @@
     "moduleResolution": "Node16",
     "declaration": true,
     "declarationMap": true,
-    "types": ["vscode", "node", "jest"]
+    "types": ["vscode", "node", "mocha"]
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+  "include": ["src/**/*", "tests/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as sinon from 'sinon';
 import { activate } from '../src/extension';
-import { SekhaTreeProvider } from '../src/treeView';
+import { SekhaTreeDataProvider } from '../src/treeView';
 
 suite('Sekha VS Code Extension Tests', () => {
   let context: vscode.ExtensionContext;
@@ -60,10 +60,13 @@ suite('Sekha VS Code Extension Tests', () => {
   });
 
   suite('TreeView', () => {
-    let treeProvider: SekhaTreeProvider;
+    let treeProvider: SekhaTreeDataProvider;
 
     setup(() => {
-      treeProvider = new SekhaTreeProvider('http://localhost:8080', 'sk-test-key');
+      const mockMemory = {
+        listConversations: sandbox.stub().resolves([])
+      };
+      treeProvider = new SekhaTreeDataProvider(mockMemory as any);
     });
 
     test('TreeProvider initializes', () => {
