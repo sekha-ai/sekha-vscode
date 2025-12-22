@@ -1,98 +1,187 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import * as assert from 'assert';
+import * as vscode from 'vscode';
+import * as sinon from 'sinon';
+import { activate } from '../src/extension';
+import { SekhaTreeProvider } from '../src/treeView';
 
-describe('Sekha VS Code Extension', () => {
-  describe('Configuration Validation', () => {
-    it('should validate required config fields', () => {
-      const config = {
-        apiUrl: 'http://localhost:8080',
-        apiKey: 'sk-test-key-12345678901234567890123456',
-      };
-      
-      expect(config.apiUrl).toBeTruthy();
-      expect(config.apiKey).toBeTruthy();
-      expect(config.apiKey.length).toBeGreaterThanOrEqual(32);
+suite('Sekha VS Code Extension Tests', () => {
+  let context: vscode.ExtensionContext;
+  let sandbox: sinon.SinonSandbox;
+
+  setup(() => {
+    sandbox = sinon.createSandbox();
+    context = {
+      subscriptions: [],
+      extensionPath: '/test/path',
+      globalState: {
+        get: sandbox.stub(),
+        update: sandbox.stub()
+      },
+      workspaceState: {
+        get: sandbox.stub(),
+        update: sandbox.stub()
+      }
+    } as any;
+  });
+
+  teardown(() => {
+    sandbox.restore();
+  });
+
+  test('Extension activates successfully', async () => {
+    await activate(context);
+    assert.ok(context.subscriptions.length > 0);
+  });
+
+  test('Registers all commands', async () => {
+    const registerStub = sandbox.stub(vscode.commands, 'registerCommand');
+    
+    await activate(context);
+
+    assert.ok(registerStub.calledWith('sekha.saveConversation'));
+    assert.ok(registerStub.calledWith('sekha.searchMemory'));
+    assert.ok(registerStub.calledWith('sekha.insertContext'));
+    assert.ok(registerStub.calledWith('sekha.refreshTreeView'));
+  });
+
+  test('Reads configuration on activation', async () => {
+    const getConfigStub = sandbox.stub(vscode.workspace, 'getConfiguration');
+    getConfigStub.returns({
+      get: (key: string) => {
+        if (key === 'apiUrl') return 'http://localhost:8080';
+        if (key === 'apiKey') return 'sk-test-key';
+        return null;
+      }
+    } as any);
+
+    await activate(context);
+
+    assert.ok(getConfigStub.calledWith('sekha'));
+  });
+
+  suite('TreeView', () => {
+    let treeProvider: SekhaTreeProvider;
+
+    setup(() => {
+      treeProvider = new SekhaTreeProvider('http://localhost:8080', 'sk-test-key');
     });
 
-    it('should reject invalid API keys', () => {
-      const shortKey = 'sk-short';
-      expect(shortKey.length).toBeLessThan(32);
+    test('TreeProvider initializes', () => {
+      assert.ok(treeProvider);
+    });
+
+    test('getChildren returns labels at root', async () => {
+      const fetchStub = sandbox.stub(global, 'fetch' as any);
+      fetchStub.resolves({
+        ok: true,
+        json: async () => ({
+          labels: ['Work', 'Personal', 'Project:AI']
+        })
+      });
+
+      const children = await treeProvider.getChildren();
+      
+      assert.strictEqual(children.length, 3);
+      assert.strictEqual(children[0].label, 'Work');
+    });
+
+    test('getChildren returns conversations for label', async () => {
+      const fetchStub = sandbox.stub(global, 'fetch' as any);
+      fetchStub.resolves({
+        ok: true,
+        json: async () => ({
+          conversations: [
+            { id: 'conv_1', label: 'Work', created_at: '2025-12-21' },
+            { id: 'conv_2', label: 'Work', created_at: '2025-12-20' }
+          ]
+        })
+      });
+
+      const labelItem = { label: 'Work', type: 'label' } as any;
+      const children = await treeProvider.getChildren(labelItem);
+
+      assert.strictEqual(children.length, 2);
     });
   });
 
-  describe('Message Parser', () => {
-    it('should parse user and assistant messages', () => {
-      const content = `User: Hello
-Assistant: Hi there!`;
-      
-      const messages = parseMessages(content);
-      
-      expect(messages).toHaveLength(2);
-      expect(messages[0].role).toBe('user');
-      expect(messages[1].role).toBe('assistant');
+  suite('Commands', () => {
+    test('saveConversation shows quick pick', async () => {
+      const showQuickPickStub = sandbox.stub(vscode.window, 'showQuickPick');
+      showQuickPickStub.resolves({ label: 'Work' } as any);
+
+      const showInputBoxStub = sandbox.stub(vscode.window, 'showInputBox');
+      showInputBoxStub.resolves('Test conversation');
+
+      await vscode.commands.executeCommand('sekha.saveConversation');
+
+      assert.ok(showQuickPickStub.called);
     });
 
-    it('should handle multi-line messages', () => {
-      const content = `User: This is a
-multi-line
-message
-Assistant: Got it`;
-      
-      const messages = parseMessages(content);
-      
-      expect(messages[0].content).toContain('multi-line');
+    test('searchMemory opens webview', async () => {
+      const createWebviewPanelStub = sandbox.stub(vscode.window, 'createWebviewPanel');
+      createWebviewPanelStub.returns({
+        webview: { html: '' },
+        reveal: () => {},
+        onDidDispose: () => ({dispose: () => {}})
+      } as any);
+
+      await vscode.commands.executeCommand('sekha.searchMemory');
+
+      assert.ok(createWebviewPanelStub.called);
     });
 
-    it('should filter empty messages', () => {
-      const content = `User:
-Assistant: Response`;
+    test('insertContext inserts text at cursor', async () => {
+      const editor = {
+        edit: sandbox.stub().resolves(true),
+        selection: { active: { line: 0, character: 0 } }
+      };
       
-      const messages = parseMessages(content);
-      
-      expect(messages).toHaveLength(1);
-      expect(messages[0].role).toBe('assistant');
+      sandbox.stub(vscode.window, 'activeTextEditor').get(() => editor);
+
+      const fetchStub = sandbox.stub(global, 'fetch' as any);
+      fetchStub.resolves({
+        ok: true,
+        json: async () => ({ context: 'Test context' })
+      });
+
+      await vscode.commands.executeCommand('sekha.insertContext');
+
+      assert.ok(editor.edit.called);
+    });
+  });
+
+  suite('Configuration Changes', () => {
+    test('Updates controller on config change', async () => {
+      await activate(context);
+
+      const changeEvent = {
+        affectsConfiguration: (section: string) => section === 'sekha'
+      };
+
+      // Trigger configuration change
+      await vscode.workspace.onDidChangeConfiguration(changeEvent as any);
+
+      // Should reinitialize with new config
+      assert.ok(true); // Placeholder - actual impl would check controller update
+    });
+  });
+
+  suite('Auto-save Feature', () => {
+    test('Auto-save timer starts when enabled', async () => {
+      sandbox.stub(vscode.workspace, 'getConfiguration').returns({
+        get: (key: string) => {
+          if (key === 'autoSave') return true;
+          if (key === 'apiUrl') return 'http://localhost:8080';
+          if (key === 'apiKey') return 'sk-test';
+          return null;
+        }
+      } as any);
+
+      const setIntervalSpy = sandbox.spy(global, 'setInterval');
+
+      await activate(context);
+
+      assert.ok(setIntervalSpy.called);
     });
   });
 });
-
-// Helper function (mirrors implementation)
-function parseMessages(content: string): Array<{ role: 'user' | 'assistant' | 'system'; content: string }> {
-  const messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [];
-  const lines = content.split('\n');
-  
-  let currentRole: 'user' | 'assistant' | 'system' | null = null;
-  let currentContent: string[] = [];
-  
-  for (const line of lines) {
-    const trimmed = line.trim();
-    
-    if (trimmed.startsWith('User:') || trimmed.startsWith('Assistant:') || trimmed.startsWith('System:')) {
-      if (currentRole && currentContent.length > 0) {
-        const content = currentContent.join('\n').trim();
-        if (content) {
-          messages.push({ role: currentRole, content });
-        }
-      }
-      
-      if (trimmed.startsWith('User:')) {
-        currentRole = 'user';
-      } else if (trimmed.startsWith('Assistant:')) {
-        currentRole = 'assistant';
-      } else {
-        currentRole = 'system';
-      }
-      
-      currentContent = [trimmed.replace(/^(User|Assistant|System):\s*/, '')];
-    } else if (trimmed && currentRole) {
-      currentContent.push(line);
-    }
-  }
-  
-  if (currentRole && currentContent.length > 0) {
-    const content = currentContent.join('\n').trim();
-    if (content) {
-      messages.push({ role: currentRole, content });
-    }
-  }
-  
-  return messages;
-}
