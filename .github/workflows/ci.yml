@@ -38,9 +38,41 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Run tests
-        run: npm test -- --ci --maxWorkers=2
+        run: npm test -- --coverage --ci --maxWorkers=2
         env:
           CI: true
+
+      - name: Check coverage threshold
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == '20.x'
+        run: |
+          node -e "
+          const coverage = require('./coverage/coverage-summary.json');
+          const total = coverage.total;
+          const threshold = 70;
+          
+          console.log('Coverage Summary:');
+          console.log('  Lines:', total.lines.pct + '%');
+          console.log('  Statements:', total.statements.pct + '%');
+          console.log('  Functions:', total.functions.pct + '%');
+          console.log('  Branches:', total.branches.pct + '%');
+          
+          if (total.lines.pct < threshold) {
+            console.error('Coverage below ' + threshold + '% threshold');
+            process.exit(1);
+          }
+          console.log('Coverage meets ' + threshold + '% threshold');
+          "
+
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == '20.x'
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage/coverage-final.json
+          flags: unittests
+          name: vscode-extension
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Build extension
         run: npm run compile
@@ -119,7 +151,8 @@ jobs:
 
       - name: Verify VSIX contents
         run: |
-          if [ -f *.vsix ]; then
+          VSIX_COUNT=$(ls -1 *.vsix 2>/dev/null | wc -l)
+          if [ "$VSIX_COUNT" -gt 0 ]; then
             echo "✅ VSIX package created successfully"
             ls -lh *.vsix
           else
@@ -140,10 +173,73 @@ jobs:
           console.log('✅ package.json is valid');
           "
 
+  integration-test:
+    name: Integration Test with Mock Controller
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build extension
+        run: npm run compile
+
+      - name: Start mock controller
+        run: |
+          node -e "
+          const http = require('http');
+          const server = http.createServer((req, res) => {
+            if (req.url === '/health') {
+              res.writeHead(200, {'Content-Type': 'application/json'});
+              res.end(JSON.stringify({status: 'healthy'}));
+            } else if (req.url === '/api/conversations') {
+              res.writeHead(200, {'Content-Type': 'application/json'});
+              res.end(JSON.stringify({conversations: []}));
+            } else {
+              res.writeHead(404);
+              res.end();
+            }
+          });
+          server.listen(8080, () => console.log('Mock on :8080'));
+          " &
+          MOCK_PID=$!
+          echo "MOCK_PID=$MOCK_PID" >> $GITHUB_ENV
+          sleep 2
+          curl -f http://localhost:8080/health || exit 1
+
+      - name: Run integration tests
+        env:
+          SEKHA_BASE_URL: http://localhost:8080
+          SEKHA_API_KEY: test-token-123
+        run: |
+          if [ -d "src/test/integration" ]; then
+            npm run test:integration
+          else
+            echo "No integration tests found, skipping"
+          fi
+        continue-on-error: true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          if [ ! -z "$MOCK_PID" ]; then
+            kill $MOCK_PID || true
+          fi
+
   status-check:
     name: All Checks Passed
     runs-on: ubuntu-latest
-    needs: [test, lint, security, package-check]
+    needs: [test, lint, security, package-check, integration-test]
     if: always()
     
     steps:
@@ -159,6 +255,10 @@ jobs:
           fi
           if [ "${{ needs.package-check.result }}" != "success" ]; then
             echo "❌ Package validation failed"
+            exit 1
+          fi
+          if [ "${{ needs.integration-test.result }}" == "failure" ]; then
+            echo "❌ Integration tests failed"
             exit 1
           fi
           echo "✅ All checks passed!"
