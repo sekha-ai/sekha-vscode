@@ -4,7 +4,10 @@ import { SekhaTreeDataProvider } from './treeView';
 import { Commands } from './commands';
 import { WebviewProvider } from './webview';
 
-export async function activate(context: vscode.ExtensionContext) {
+// Export timer for testing
+export let autoSaveTimer: NodeJS.Timeout | undefined;
+
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
   console.log('Sekha extension activating...');
   
   const config = vscode.workspace.getConfiguration('sekha');
@@ -43,6 +46,9 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('sekha.insertContext', () => 
       commands.insertContext()
     ),
+    vscode.commands.registerCommand('sekha.searchAndInsert', () => 
+      commands.searchAndInsert()
+    ),
     vscode.commands.registerCommand('sekha.refresh', () => 
       treeDataProvider.refresh()
     ),
@@ -65,7 +71,7 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   // Auto-save setup
-  setupAutoSave(config, commands);
+  autoSaveTimer = setupAutoSave(config, commands);
 
   console.log('Sekha extension activated successfully!');
 }
@@ -73,7 +79,7 @@ export async function activate(context: vscode.ExtensionContext) {
 function validateConfig(config: vscode.WorkspaceConfiguration): boolean {
   const apiUrl = config.get<string>('apiUrl');
   const apiKey = config.get<string>('apiKey');
-  return Boolean(apiUrl && apiKey);
+  return Boolean(apiUrl && apiKey && apiKey.length >= 32);
 }
 
 function createMemoryController(config: vscode.WorkspaceConfiguration): MemoryController {
@@ -88,18 +94,22 @@ function createMemoryController(config: vscode.WorkspaceConfiguration): MemoryCo
 
 function setupAutoSave(config: vscode.WorkspaceConfiguration, commands: Commands): NodeJS.Timeout | undefined {
   const autoSave = config.get<boolean>('autoSave', false);
-  if (!autoSave) return;
+  if (!autoSave) return undefined;
 
   const intervalMinutes = config.get<number>('autoSaveInterval', 5);
-  const intervalMs = intervalMinutes * 60000;
+  const intervalMs = Math.max(60000, intervalMinutes * 60000); // Minimum 1 minute
   
-  if (intervalMs <= 0) return;
-
   return setInterval(() => {
-    commands.autoSaveConversation();
+    commands.autoSaveConversation().catch(err => {
+      console.error('Auto-save failed:', err);
+    });
   }, intervalMs);
 }
 
-export function deactivate() {
+export function deactivate(): void {
+  if (autoSaveTimer) {
+    clearInterval(autoSaveTimer);
+    autoSaveTimer = undefined;
+  }
   console.log('Sekha extension deactivated');
 }

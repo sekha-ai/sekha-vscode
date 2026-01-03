@@ -1,10 +1,6 @@
 import * as vscode from 'vscode';
 import { Conversation } from '@sekha/sdk';
-
-interface Message {
-  role: string;
-  content: string;
-}
+import { Message } from '@sekha/sdk';
 
 export class WebviewProvider {
   constructor(private extensionUri: vscode.Uri) {}
@@ -25,7 +21,7 @@ export class WebviewProvider {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>${this.escapeHtml(conversation.label)}</title>
+        <title>${this.escapeHtml(conversation.label || 'Conversation')}</title>
         <style>
           body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -75,7 +71,7 @@ export class WebviewProvider {
       </head>
       <body>
         <div class="conversation-header">
-          <h1 class="conversation-title">${this.escapeHtml(conversation.label)}</h1>
+          <h1 class="conversation-title">${this.escapeHtml(conversation.label || 'Untitled')}</h1>
           <div class="conversation-meta">
             ID: ${conversation.id} | 
             Folder: ${conversation.folder || 'N/A'} | 
@@ -92,11 +88,13 @@ export class WebviewProvider {
   }
 
   private escapeHtml(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
+    const map: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, (m) => map[m]);
   }
 }

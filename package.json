@@ -87,6 +87,11 @@
         "icon": "$(insert)"
       },
       {
+        "command": "sekha.searchAndInsert",
+        "title": "Sekha: Search & Insert",
+        "icon": "$(combine)"
+      },
+      {
         "command": "sekha.refresh",
         "title": "Sekha: Refresh",
         "icon": "$(refresh)"
@@ -133,6 +138,11 @@
           "group": "navigation"
         },
         {
+          "command": "sekha.searchAndInsert",
+          "when": "view == sekhaExplorer",
+          "group": "navigation"
+        },
+        {
           "command": "sekha.openSettings",
           "when": "view == sekhaExplorer",
           "group": "navigation"
@@ -165,6 +175,9 @@
           "command": "sekha.search"
         },
         {
+          "command": "sekha.searchAndInsert"
+        },
+        {
           "command": "sekha.insertContext"
         },
         {
@@ -185,6 +198,11 @@
         "mac": "cmd+shift+f"
       },
       {
+        "command": "sekha.searchAndInsert",
+        "key": "ctrl+shift+a",
+        "mac": "cmd+shift+a"
+      },
+      {
         "command": "sekha.insertContext",
         "key": "ctrl+shift+i",
         "mac": "cmd+shift+i",
@@ -197,7 +215,9 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
-    "test": "node ./out/test/runTest.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "lint": "eslint src --ext ts",
     "lint:fix": "eslint src --ext ts --fix",
     "package": "vsce package",
@@ -205,22 +225,18 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",
-    "@types/jest": "^29.5.14",
-    "@types/mocha": "^10.0.10",
     "@types/node": "^22.10.1",
-    "@types/sinon": "^21.0.0",
     "@types/vscode": "^1.95.0",
     "@typescript-eslint/eslint-plugin": "^8.15.0",
     "@typescript-eslint/parser": "^8.15.0",
+    "@vitest/coverage-v8": "^4.0.16",
     "@vscode/test-electron": "^2.4.1",
     "@vscode/vsce": "^3.2.1",
     "eslint": "^9.15.0",
-    "jest": "^29.7.0",
-    "mocha": "^10.2.0",
-    "sinon": "^17.0.1",
-    "ts-jest": "^29.2.5",
+    "happy-dom": "^20.0.11",
     "typescript": "^5.7.2",
-    "typescript-eslint": "^8.15.0"
+    "typescript-eslint": "^8.15.0",
+    "vitest": "^4.0.16"
   },
   "dependencies": {
     "@sekha/sdk": "file:../sekha-js-sdk"

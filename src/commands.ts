@@ -1,12 +1,7 @@
 import * as vscode from 'vscode';
-import { MemoryController, Conversation, SearchResult } from '@sekha/sdk';
+import { MemoryController, Conversation, SearchResult, Message } from '@sekha/sdk';
 import { SekhaTreeDataProvider } from './treeView';
 import { WebviewProvider } from './webview';
-
-interface Message {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-}
 
 export class Commands {
   constructor(
@@ -29,7 +24,6 @@ export class Commands {
         return;
       }
 
-      // Parse conversation from editor content
       const messages = this.parseMessages(content);
       
       const label = await vscode.window.showInputBox({
@@ -55,7 +49,6 @@ export class Commands {
   }
 
   async autoSaveConversation(): Promise<void> {
-    // Similar to saveConversation but silent
     try {
       const editor = vscode.window.activeTextEditor;
       if (!editor) return;
@@ -73,7 +66,6 @@ export class Commands {
       });
 
     } catch (error) {
-      // Silent failure for auto-save
       console.error('Auto-save failed:', error);
     }
   }
@@ -115,6 +107,44 @@ export class Commands {
     }
   }
 
+  async searchAndInsert(): Promise<void> {
+    try {
+      const query = await vscode.window.showInputBox({
+        prompt: 'Search and insert context',
+        placeHolder: 'What information do you need?',
+      });
+
+      if (!query) return;
+
+      const results = await this.memory.query(query);
+      
+      if (results.length === 0) {
+        vscode.window.showInformationMessage('No results found');
+        return;
+      }
+
+      const items = results.map((r: SearchResult) => ({
+        label: r.label || 'Untitled',
+        description: `Score: ${(r.score * 100).toFixed(1)}%`,
+        detail: r.content?.substring(0, 100) || '',
+        conversationId: r.conversationId,
+      }));
+
+      const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: 'Select context to insert',
+      });
+
+      if (selected?.conversationId) {
+        const conversation = await this.memory.get(selected.conversationId);
+        await this.insertConversationContext(conversation);
+      }
+
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(`Search and insert failed: ${message}`);
+    }
+  }
+
   async insertContext(): Promise<void> {
     try {
       const query = await vscode.window.showInputBox({
@@ -126,7 +156,7 @@ export class Commands {
 
       const context = await this.memory.assembleContext({
         query,
-        tokenBudget: 4000, // Reasonable limit for VS Code
+        tokenBudget: 4000,
       });
 
       const editor = vscode.window.activeTextEditor;
@@ -148,11 +178,30 @@ export class Commands {
     }
   }
 
+  async insertConversationContext(conversation: Conversation): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      throw new Error('No active editor');
+    }
+
+    const contextText = conversation.messages
+      .map(m => `[${m.role}] ${m.content}`)
+      .join('\n\n');
+
+    await editor.edit((editBuilder: vscode.TextEditorEdit) => {
+      editBuilder.insert(
+        editor.selection.active,
+        `\n\n<!-- Context from "${conversation.label}" -->\n${contextText}\n\n`
+      );
+    });
+
+    vscode.window.showInformationMessage(`Context inserted from "${conversation.label}"`);
+  }
+
   async viewConversation(id: string): Promise<void> {
     try {
       const conversation = await this.memory.get(id);
       
-      // Create or show webview panel
       const panel = vscode.window.createWebviewPanel(
         'sekhaConversation',
         conversation.label || 'Conversation',

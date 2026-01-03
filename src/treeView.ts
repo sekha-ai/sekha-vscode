@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { MemoryController, MemoryConfig, Conversation } from '@sekha/sdk';
+import { MemoryController, Conversation } from '@sekha/sdk';
+import { Message } from '@sekha/sdk';
 
 export class SekhaTreeDataProvider implements vscode.TreeDataProvider<SekhaTreeItem> {
   private _onDidChangeTreeData = new vscode.EventEmitter<SekhaTreeItem | undefined>();
@@ -18,14 +19,11 @@ export class SekhaTreeDataProvider implements vscode.TreeDataProvider<SekhaTreeI
   async getChildren(element?: SekhaTreeItem): Promise<SekhaTreeItem[]> {
     try {
       if (!element) {
-        // Root level: show labels
         return await this.getLabelNodes();
       } else if (element.contextValue === 'label') {
-        // Label level: show conversations
         return await this.getConversationNodes(element.label!);
-      } else if (element.contextValue === 'conversation') {
-        // Conversation level: show messages
-        return await this.getMessageNodes(element.conversation!);
+      } else if (element.contextValue === 'conversation' && element.conversation) {
+        return await this.getMessageNodes(element.conversation);
       }
       return [];
     } catch (error) {
@@ -52,12 +50,12 @@ export class SekhaTreeDataProvider implements vscode.TreeDataProvider<SekhaTreeI
     const conversations = await this.memory.listConversations({ label });
     const maxConversations = vscode.workspace
       .getConfiguration('sekha')
-      .get('maxConversationsInTree', 100);
+      .get<number>('maxConversationsInTree', 100);
     
     return conversations
       .slice(0, maxConversations)
       .map(conv => new SekhaTreeItem(
-        conv.label,
+        conv.label || 'Untitled',
         vscode.TreeItemCollapsibleState.Collapsed,
         'conversation',
         conv,
@@ -68,8 +66,8 @@ export class SekhaTreeDataProvider implements vscode.TreeDataProvider<SekhaTreeI
   }
 
   private async getMessageNodes(conversation: Conversation): Promise<SekhaTreeItem[]> {
-    return conversation.messages.map((msg, index) => new SekhaTreeItem(
-      `${msg.role}: ${msg.content.substring(0, 50)}...`,
+    return conversation.messages.map((msg: Message, index: number) => new SekhaTreeItem(
+      `${msg.role}: ${msg.content.substring(0, 50)}${msg.content.length > 50 ? '...' : ''}`,
       vscode.TreeItemCollapsibleState.None,
       'message',
       undefined,
@@ -80,7 +78,7 @@ export class SekhaTreeDataProvider implements vscode.TreeDataProvider<SekhaTreeI
   }
 }
 
-class SekhaTreeItem extends vscode.TreeItem {
+export class SekhaTreeItem extends vscode.TreeItem {
   constructor(
     public readonly label: string,
     public readonly collapsibleState: vscode.TreeItemCollapsibleState,

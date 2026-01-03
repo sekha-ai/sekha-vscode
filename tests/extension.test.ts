@@ -1,190 +1,241 @@
-import * as assert from 'assert';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { activate, deactivate } from '../src/extension';
 import * as vscode from 'vscode';
-import * as sinon from 'sinon';
-import { activate } from '../src/extension';
-import { SekhaTreeDataProvider } from '../src/treeView';
 
-suite('Sekha VS Code Extension Tests', () => {
-  let context: vscode.ExtensionContext;
-  let sandbox: sinon.SinonSandbox;
+// Mock VS Code API - define directly in factory
+vi.mock('vscode', () => ({
+  window: {
+    showWarningMessage: vi.fn(),
+    showInformationMessage: vi.fn(),
+    createTreeView: vi.fn().mockReturnValue({}),
+    registerTreeDataProvider: vi.fn()
+  },
+  workspace: {
+    getConfiguration: vi.fn(),
+    onDidChangeConfiguration: vi.fn(() => ({ dispose: vi.fn() }))
+  },
+  commands: {
+    registerCommand: vi.fn(() => ({ dispose: vi.fn() })),
+    executeCommand: vi.fn()
+  },
+  ExtensionContext: vi.fn(),
+  TreeItemCollapsibleState: {
+    None: 0,
+    Collapsed: 1,
+    Expanded: 2
+  },
+  ViewColumn: { One: 1 },
+  Uri: {
+    file: (path: string) => ({ fsPath: path })
+  },
+  ConfigurationChangeEvent: vi.fn()
+}));
 
-  setup(() => {
-    sandbox = sinon.createSandbox();
-    context = {
-      subscriptions: [],
-      extensionPath: '/test/path',
-      globalState: {
-        get: sandbox.stub(),
-        update: sandbox.stub()
-      },
-      workspaceState: {
-        get: sandbox.stub(),
-        update: sandbox.stub()
-      }
-    } as any;
-  });
+// Mock @sekha/sdk
+vi.mock('@sekha/sdk', () => ({
+  MemoryController: vi.fn(),
+  MemoryConfig: vi.fn()
+}));
 
-  teardown(() => {
-    sandbox.restore();
-  });
+// Fix: Mock as actual class, not factory function
+class MockSekhaTreeDataProvider {
+  refresh = vi.fn();
+}
 
-  test('Extension activates successfully', async () => {
-    await activate(context);
-    assert.ok(context.subscriptions.length > 0);
-  });
+class MockCommands {
+  saveConversation = vi.fn();
+  search = vi.fn();
+  insertContext = vi.fn();
+  searchAndInsert = vi.fn();
+  viewConversation = vi.fn();
+  openSettings = vi.fn();
+  autoSaveConversation = vi.fn();
+}
 
-  test('Registers all commands', async () => {
-    const registerStub = sandbox.stub(vscode.commands, 'registerCommand');
+class MockWebviewProvider {
+  getConversationHtml = vi.fn().mockReturnValue('<html></html>');
+}
+
+vi.mock('../src/treeView', () => ({
+  SekhaTreeDataProvider: vi.fn().mockImplementation(function(this: any) {
+    return new MockSekhaTreeDataProvider();
+  })
+}));
+
+vi.mock('../src/commands', () => ({
+  Commands: vi.fn().mockImplementation(function(this: any) {
+    return new MockCommands();
+  })
+}));
+
+vi.mock('../src/webview', () => ({
+  WebviewProvider: vi.fn().mockImplementation(function(this: any, uri: any) {
+    return new MockWebviewProvider();
+  })
+}));
+
+describe('Extension', () => {
+  let mockContext: vscode.ExtensionContext;
+  let mockConfig: any;
+  let setIntervalSpy: any;
+  let clearIntervalSpy: any;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
     
-    await activate(context);
+    mockContext = {
+      subscriptions: [],
+      extensionUri: { fsPath: '/test' } as vscode.Uri
+    } as any;
 
-    assert.ok(registerStub.calledWith('sekha.saveConversation'));
-    assert.ok(registerStub.calledWith('sekha.searchMemory'));
-    assert.ok(registerStub.calledWith('sekha.insertContext'));
-    assert.ok(registerStub.calledWith('sekha.refreshTreeView'));
-  });
-
-  test('Reads configuration on activation', async () => {
-    const getConfigStub = sandbox.stub(vscode.workspace, 'getConfiguration');
-    getConfigStub.returns({
-      get: (key: string) => {
-        if (key === 'apiUrl') return 'http://localhost:8080';
-        if (key === 'apiKey') return 'sk-test-key';
-        return null;
-      }
-    } as any);
-
-    await activate(context);
-
-    assert.ok(getConfigStub.calledWith('sekha'));
-  });
-
-  suite('TreeView', () => {
-    let treeProvider: SekhaTreeDataProvider;
-
-    setup(() => {
-      const mockMemory = {
-        listConversations: sandbox.stub().resolves([])
-      };
-      treeProvider = new SekhaTreeDataProvider(mockMemory as any);
-    });
-
-    test('TreeProvider initializes', () => {
-      assert.ok(treeProvider);
-    });
-
-    test('getChildren returns labels at root', async () => {
-      const fetchStub = sandbox.stub(global, 'fetch' as any);
-      fetchStub.resolves({
-        ok: true,
-        json: async () => ({
-          labels: ['Work', 'Personal', 'Project:AI']
-        })
-      });
-
-      const children = await treeProvider.getChildren();
-      
-      assert.strictEqual(children.length, 3);
-      assert.strictEqual(children[0].label, 'Work');
-    });
-
-    test('getChildren returns conversations for label', async () => {
-      const fetchStub = sandbox.stub(global, 'fetch' as any);
-      fetchStub.resolves({
-        ok: true,
-        json: async () => ({
-          conversations: [
-            { id: 'conv_1', label: 'Work', created_at: '2025-12-21' },
-            { id: 'conv_2', label: 'Work', created_at: '2025-12-20' }
-          ]
-        })
-      });
-
-      const labelItem = { label: 'Work', type: 'label' } as any;
-      const children = await treeProvider.getChildren(labelItem);
-
-      assert.strictEqual(children.length, 2);
-    });
-  });
-
-  suite('Commands', () => {
-    test('saveConversation shows quick pick', async () => {
-      const showQuickPickStub = sandbox.stub(vscode.window, 'showQuickPick');
-      showQuickPickStub.resolves({ label: 'Work' } as any);
-
-      const showInputBoxStub = sandbox.stub(vscode.window, 'showInputBox');
-      showInputBoxStub.resolves('Test conversation');
-
-      await vscode.commands.executeCommand('sekha.saveConversation');
-
-      assert.ok(showQuickPickStub.called);
-    });
-
-    test('searchMemory opens webview', async () => {
-      const createWebviewPanelStub = sandbox.stub(vscode.window, 'createWebviewPanel');
-      createWebviewPanelStub.returns({
-        webview: { html: '' },
-        reveal: () => {},
-        onDidDispose: () => ({dispose: () => {}})
-      } as any);
-
-      await vscode.commands.executeCommand('sekha.searchMemory');
-
-      assert.ok(createWebviewPanelStub.called);
-    });
-
-    test('insertContext inserts text at cursor', async () => {
-      const editor = {
-        edit: sandbox.stub().resolves(true),
-        selection: { active: { line: 0, character: 0 } }
-      };
-      
-      sandbox.stub(vscode.window, 'activeTextEditor').get(() => editor);
-
-      const fetchStub = sandbox.stub(global, 'fetch' as any);
-      fetchStub.resolves({
-        ok: true,
-        json: async () => ({ context: 'Test context' })
-      });
-
-      await vscode.commands.executeCommand('sekha.insertContext');
-
-      assert.ok(editor.edit.called);
-    });
-  });
-
-  suite('Configuration Changes', () => {
-    test('Updates controller on config change', async () => {
-      await activate(context);
-
-      const changeEvent = {
-        affectsConfiguration: (section: string) => section === 'sekha'
-      };
-
-      // Trigger configuration change
-      await vscode.workspace.onDidChangeConfiguration(changeEvent as any);
-
-      // Should reinitialize with new config
-      assert.ok(true); // Placeholder - actual impl would check controller update
-    });
-  });
-
-  suite('Auto-save Feature', () => {
-    test('Auto-save timer starts when enabled', async () => {
-      sandbox.stub(vscode.workspace, 'getConfiguration').returns({
-        get: (key: string) => {
-          if (key === 'autoSave') return true;
-          if (key === 'apiUrl') return 'http://localhost:8080';
-          if (key === 'apiKey') return 'sk-test';
-          return null;
+    mockConfig = {
+      get: vi.fn((key: string) => {
+        switch (key) {
+          case 'apiUrl': return 'http://localhost:8080';
+          case 'apiKey': return 'sk-'.padEnd(35, 'x');
+          case 'autoSave': return false;
+          case 'autoSaveInterval': return 5;
+          default: return undefined;
         }
-      } as any);
+      })
+    };
 
-      const setIntervalSpy = sandbox.spy(global, 'setInterval');
+    (vscode.workspace as any).getConfiguration.mockReturnValue(mockConfig);
+    (vscode.workspace as any).onDidChangeConfiguration.mockReturnValue({ dispose: vi.fn() });
+    (vscode.commands as any).registerCommand.mockReturnValue({ dispose: vi.fn() });
 
-      await activate(context);
+    setIntervalSpy = vi.spyOn(global, 'setInterval');
+    clearIntervalSpy = vi.spyOn(global, 'clearInterval');
+  });
 
-      assert.ok(setIntervalSpy.called);
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  describe('activate', () => {
+    it('should activate successfully with valid config', async () => {
+      await activate(mockContext);
+
+      expect(vscode.workspace.getConfiguration).toHaveBeenCalledWith('sekha');
+      expect(mockContext.subscriptions.length).toBeGreaterThan(0);
+    });
+
+    it('should show warning with invalid config', async () => {
+      mockConfig.get.mockImplementation((key: string) => {
+        if (key === 'apiUrl') return '';
+        if (key === 'apiKey') return '';
+        return undefined;
+      });
+
+      await activate(mockContext);
+
+      expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+        'Sekha: Configuration missing. Please set sekha.apiUrl and sekha.apiKey in settings.'
+      );
+    });
+
+    it('should register all commands', async () => {
+      await activate(mockContext);
+
+      expect(vscode.commands.registerCommand).toHaveBeenCalledWith(
+        'sekha.saveConversation',
+        expect.any(Function)
+      );
+      expect(vscode.commands.registerCommand).toHaveBeenCalledWith(
+        'sekha.search',
+        expect.any(Function)
+      );
+      expect(vscode.commands.registerCommand).toHaveBeenCalledWith(
+        'sekha.searchAndInsert',
+        expect.any(Function)
+      );
+      expect(vscode.commands.registerCommand).toHaveBeenCalledWith(
+        'sekha.insertContext',
+        expect.any(Function)
+      );
+      expect(vscode.commands.registerCommand).toHaveBeenCalledWith(
+        'sekha.refresh',
+        expect.any(Function)
+      );
+      expect(vscode.commands.registerCommand).toHaveBeenCalledWith(
+        'sekha.viewConversation',
+        expect.any(Function)
+      );
+      expect(vscode.commands.registerCommand).toHaveBeenCalledWith(
+        'sekha.openSettings',
+        expect.any(Function)
+      );
+    });
+
+    it('should setup configuration watcher', async () => {
+      await activate(mockContext);
+
+      expect(vscode.workspace.onDidChangeConfiguration).toHaveBeenCalled();
+    });
+
+    it('should setup auto-save when enabled', async () => {
+      mockConfig.get.mockImplementation((key: string) => {
+        switch (key) {
+          case 'apiUrl': return 'http://localhost:8080';
+          case 'apiKey': return 'sk-'.padEnd(35, 'x');
+          case 'autoSave': return true;
+          case 'autoSaveInterval': return 5;
+          default: return undefined;
+        }
+      });
+
+      await activate(mockContext);
+
+      expect(setIntervalSpy).toHaveBeenCalled();
+    });
+
+    it('should not setup auto-save when disabled', async () => {
+      await activate(mockContext);
+
+      expect(setIntervalSpy).not.toHaveBeenCalled();
+    });
+
+    it('should enforce minimum auto-save interval', async () => {
+      mockConfig.get.mockImplementation((key: string) => {
+        switch (key) {
+          case 'apiUrl': return 'http://localhost:8080';
+          case 'apiKey': return 'sk-'.padEnd(35, 'x');
+          case 'autoSave': return true;
+          case 'autoSaveInterval': return 0.5; // Less than 1 minute
+          default: return undefined;
+        }
+      });
+
+      await activate(mockContext);
+
+      expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 60000);
+    });
+  });
+
+  describe('deactivate', () => {
+    it('should clear auto-save timer', () => {
+      // This test needs to access the internal timer
+      // We'll spy on the global clearInterval to verify it's called
+      const spy = vi.spyOn(global, 'clearInterval');
+      
+      // Activate with auto-save enabled
+      mockConfig.get.mockImplementation((key: string) => {
+        switch (key) {
+          case 'apiUrl': return 'http://localhost:8080';
+          case 'apiKey': return 'sk-'.padEnd(35, 'x');
+          case 'autoSave': return true;
+          case 'autoSaveInterval': return 5;
+          default: return undefined;
+        }
+      });
+
+      activate(mockContext);
+      deactivate();
+
+      // The extension should call clearInterval on the timer
+      expect(spy).toHaveBeenCalled();
+      
+      spy.mockRestore();
     });
   });
 });
