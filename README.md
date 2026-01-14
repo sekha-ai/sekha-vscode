@@ -1,9 +1,14 @@
+[![CI Status](https://github.com/sekha-ai/sekha-vscode/workflows/CI/badge.svg)](https://github.com/sekha-ai/sekha-vscode/actions)
+[![codecov](https://codecov.io/gh/sekha-ai/sekha-vscode/branch/main/graph/badge.svg)](https://codecov.io/gh/sekha-ai/sekha-vscode)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![TypeScript](https://img.shields.io/badge/typescript-5.3%2B-blue.svg)](https://www.typescriptlang.org)
+[![npm](https://img.shields.io/npm/v/@sekha-ai/sekha-js-sdk.svg)](https://www.npmjs.com/package/@sekha-ai/sekha-js-sdk)
+[![VS Code Marketplace](https://img.shields.io/vscode-marketplace/v/sekha-ai.sekha-vscode.svg)](https://marketplace.visualstudio.com/items?itemName=sekha-ai.sekha-vscode)
+
+
 # Sekha Memory Controller for VS Code
 
 <div align="center">
-
-[![VS Code Marketplace](https://img.shields.io/vscode-marketplace/v/sekha-ai.sekha-vscode.svg)](https://marketplace.visualstudio.com/items?itemName=sekha-ai.sekha-vscode)
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
 Persistent AI memory and context management for VS Code. Never lose track of important conversations again.
 
