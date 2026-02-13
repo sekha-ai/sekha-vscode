@@ -2,10 +2,16 @@ import * as vscode from 'vscode';
 import { SekhaClient, SekhaConfig } from '@sekha/sdk';
 import { SekhaTreeDataProvider } from './treeView';
 import { Commands } from './commands';
+import { BatchCommands } from './batchCommands';
 import { WebviewProvider } from './webview';
+import { SelectionManager } from './selectionManager';
+import { ExportService } from './exportService';
+import { MergeService } from './mergeService';
+import { TagManager } from './tagManager';
 
 // Export timer for testing
 export let autoSaveTimer: NodeJS.Timeout | undefined;
+let statusBarItem: vscode.StatusBarItem;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   console.log('Sekha extension activating...');
@@ -32,8 +38,39 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // Initialize webview provider
   const webviewProvider = new WebviewProvider(context.extensionUri);
 
+  // Initialize services
+  const selectionManager = new SelectionManager();
+  const exportService = new ExportService();
+  const mergeService = new MergeService(sekhaClient);
+  const tagManager = new TagManager(sekhaClient);
+
   // Initialize commands
   const commands = new Commands(sekhaClient, treeDataProvider, webviewProvider);
+  const batchCommands = new BatchCommands(
+    sekhaClient,
+    selectionManager,
+    exportService,
+    mergeService,
+    treeDataProvider
+  );
+
+  // Create status bar item for selection
+  statusBarItem = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+    100
+  );
+  statusBarItem.hide();
+  context.subscriptions.push(statusBarItem);
+
+  // Update status bar on selection change
+  selectionManager.onDidChangeSelection((selected) => {
+    if (selected.length > 0) {
+      statusBarItem.text = `📊 Sekha: ${selected.length} selected`;
+      statusBarItem.show();
+    } else {
+      statusBarItem.hide();
+    }
+  });
 
   // Register core commands
   context.subscriptions.push(
@@ -65,8 +102,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     
     // Conversation management commands
-    vscode.commands.registerCommand('sekha.viewConversation', (id: string) => 
-      commands.viewConversation(id)
+    vscode.commands.registerCommand('sekha.viewConversation', (item: any) => 
+      commands.viewConversation(item.conversationId)
     ),
     vscode.commands.registerCommand('sekha.editLabel', (item: any) => 
       commands.editLabel(item.conversationId)
@@ -86,6 +123,111 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('sekha.deleteConversation', (item: any) => 
       commands.deleteConversation(item.conversationId)
     ),
+    
+    // Batch operations
+    vscode.commands.registerCommand('sekha.selectAll', () => 
+      batchCommands.selectAll()
+    ),
+    vscode.commands.registerCommand('sekha.clearSelection', () => 
+      batchCommands.clearSelection()
+    ),
+    vscode.commands.registerCommand('sekha.batchPin', () => 
+      batchCommands.batchPin()
+    ),
+    vscode.commands.registerCommand('sekha.batchUnpin', () => 
+      batchCommands.batchUnpin()
+    ),
+    vscode.commands.registerCommand('sekha.batchArchive', () => 
+      batchCommands.batchArchive()
+    ),
+    vscode.commands.registerCommand('sekha.batchDelete', () => 
+      batchCommands.batchDelete()
+    ),
+    vscode.commands.registerCommand('sekha.batchMove', () => 
+      batchCommands.batchMove()
+    ),
+    vscode.commands.registerCommand('sekha.batchAddTags', () => 
+      batchCommands.batchAddTags()
+    ),
+    vscode.commands.registerCommand('sekha.batchExport', () => 
+      batchCommands.batchExport()
+    ),
+    vscode.commands.registerCommand('sekha.mergeConversations', () => 
+      batchCommands.mergeConversations()
+    ),
+    vscode.commands.registerCommand('sekha.exportConversation', (item: any) => 
+      batchCommands.exportConversation(item.conversationId)
+    ),
+    
+    // Tag commands
+    vscode.commands.registerCommand('sekha.addTags', async (item: any) => {
+      const tagsInput = await vscode.window.showInputBox({
+        prompt: 'Enter tags (comma-separated)',
+        placeHolder: 'python, tutorial, api',
+      });
+      
+      if (!tagsInput) return;
+      
+      const tags = tagsInput.split(',').map(t => t.trim()).filter(Boolean);
+      if (tags.length === 0) return;
+      
+      try {
+        await tagManager.addTags(item.conversationId, tags);
+        vscode.window.showInformationMessage(`Added tags: ${tags.join(', ')}`);
+        treeDataProvider.refresh();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`Failed to add tags: ${message}`);
+      }
+    }),
+    vscode.commands.registerCommand('sekha.removeTags', async (item: any) => {
+      try {
+        const existingTags = await tagManager.getTags(item.conversationId);
+        
+        if (existingTags.length === 0) {
+          vscode.window.showInformationMessage('No tags to remove');
+          return;
+        }
+        
+        const selected = await vscode.window.showQuickPick(existingTags, {
+          canPickMany: true,
+          placeHolder: 'Select tags to remove',
+        });
+        
+        if (!selected || selected.length === 0) return;
+        
+        await tagManager.removeTags(item.conversationId, selected);
+        vscode.window.showInformationMessage(`Removed tags: ${selected.join(', ')}`);
+        treeDataProvider.refresh();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`Failed to remove tags: ${message}`);
+      }
+    }),
+    vscode.commands.registerCommand('sekha.suggestTags', async (item: any) => {
+      try {
+        const suggestions = await tagManager.suggestTags(item.conversationId);
+        
+        if (suggestions.length === 0) {
+          vscode.window.showInformationMessage('No tag suggestions available');
+          return;
+        }
+        
+        const selected = await vscode.window.showQuickPick(suggestions, {
+          canPickMany: true,
+          placeHolder: 'Select tags to add',
+        });
+        
+        if (!selected || selected.length === 0) return;
+        
+        await tagManager.addTags(item.conversationId, selected);
+        vscode.window.showInformationMessage(`Added suggested tags: ${selected.join(', ')}`);
+        treeDataProvider.refresh();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`Failed to suggest tags: ${message}`);
+      }
+    }),
     
     // Utility commands
     vscode.commands.registerCommand('sekha.showStats', () => 

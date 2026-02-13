@@ -72,6 +72,34 @@
           "type": "string",
           "default": "/vscode",
           "description": "Default folder for saved conversations"
+        },
+        "sekha.batchOperationChunkSize": {
+          "type": "number",
+          "default": 10,
+          "minimum": 5,
+          "maximum": 50,
+          "description": "Number of items to process per chunk in batch operations"
+        },
+        "sekha.exportDefaultFormat": {
+          "type": "string",
+          "default": "markdown",
+          "enum": ["markdown", "json", "text", "html"],
+          "description": "Default format for exporting conversations"
+        },
+        "sekha.exportIncludeMetadata": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include metadata in exports"
+        },
+        "sekha.tagSuggestionsEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable AI-powered tag suggestions"
+        },
+        "sekha.showSelectionInStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show selection count in status bar"
         }
       }
     },
@@ -162,6 +190,76 @@
         "icon": "$(graph)"
       },
       {
+        "command": "sekha.selectAll",
+        "title": "Sekha: Select All Conversations",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "sekha.clearSelection",
+        "title": "Sekha: Clear Selection",
+        "icon": "$(close)"
+      },
+      {
+        "command": "sekha.batchPin",
+        "title": "Sekha: Batch Pin Selected",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "sekha.batchUnpin",
+        "title": "Sekha: Batch Unpin Selected",
+        "icon": "$(pinned)"
+      },
+      {
+        "command": "sekha.batchArchive",
+        "title": "Sekha: Batch Archive Selected",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "sekha.batchDelete",
+        "title": "Sekha: Batch Delete Selected",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "sekha.batchMove",
+        "title": "Sekha: Batch Move Selected",
+        "icon": "$(folder)"
+      },
+      {
+        "command": "sekha.batchAddTags",
+        "title": "Sekha: Batch Add Tags",
+        "icon": "$(tag)"
+      },
+      {
+        "command": "sekha.batchExport",
+        "title": "Sekha: Batch Export Selected",
+        "icon": "$(export)"
+      },
+      {
+        "command": "sekha.mergeConversations",
+        "title": "Sekha: Merge Selected Conversations",
+        "icon": "$(combine)"
+      },
+      {
+        "command": "sekha.exportConversation",
+        "title": "Sekha: Export Conversation",
+        "icon": "$(export)"
+      },
+      {
+        "command": "sekha.addTags",
+        "title": "Sekha: Add Tags",
+        "icon": "$(tag)"
+      },
+      {
+        "command": "sekha.removeTags",
+        "title": "Sekha: Remove Tags",
+        "icon": "$(close)"
+      },
+      {
+        "command": "sekha.suggestTags",
+        "title": "Sekha: Suggest Tags (AI)",
+        "icon": "$(sparkle)"
+      },
+      {
         "command": "sekha.openSettings",
         "title": "Sekha: Open Settings",
         "icon": "$(settings-gear)"
@@ -226,6 +324,16 @@
           "group": "2_edit@2"
         },
         {
+          "command": "sekha.addTags",
+          "when": "view == sekhaExplorer && viewItem == conversation",
+          "group": "2_edit@3"
+        },
+        {
+          "command": "sekha.exportConversation",
+          "when": "view == sekhaExplorer && viewItem == conversation",
+          "group": "2_edit@4"
+        },
+        {
           "command": "sekha.pinConversation",
           "when": "view == sekhaExplorer && viewItem == conversation",
           "group": "3_manage@1"
@@ -239,6 +347,46 @@
           "command": "sekha.deleteConversation",
           "when": "view == sekhaExplorer && viewItem == conversation",
           "group": "4_danger@1"
+        },
+        {
+          "command": "sekha.selectAll",
+          "when": "view == sekhaExplorer",
+          "group": "5_batch@1"
+        },
+        {
+          "command": "sekha.batchPin",
+          "when": "view == sekhaExplorer",
+          "group": "5_batch@2"
+        },
+        {
+          "command": "sekha.batchArchive",
+          "when": "view == sekhaExplorer",
+          "group": "5_batch@3"
+        },
+        {
+          "command": "sekha.batchMove",
+          "when": "view == sekhaExplorer",
+          "group": "5_batch@4"
+        },
+        {
+          "command": "sekha.batchExport",
+          "when": "view == sekhaExplorer",
+          "group": "5_batch@5"
+        },
+        {
+          "command": "sekha.mergeConversations",
+          "when": "view == sekhaExplorer",
+          "group": "6_advanced@1"
+        },
+        {
+          "command": "sekha.batchDelete",
+          "when": "view == sekhaExplorer",
+          "group": "7_danger_batch@1"
+        },
+        {
+          "command": "sekha.clearSelection",
+          "when": "view == sekhaExplorer",
+          "group": "8_utility@1"
         }
       ],
       "editor/context": [
@@ -289,10 +437,25 @@
           "command": "sekha.suggestLabels"
         },
         {
+          "command": "sekha.suggestTags"
+        },
+        {
           "command": "sekha.showStats"
         },
         {
           "command": "sekha.refresh"
+        },
+        {
+          "command": "sekha.selectAll"
+        },
+        {
+          "command": "sekha.clearSelection"
+        },
+        {
+          "command": "sekha.batchExport"
+        },
+        {
+          "command": "sekha.mergeConversations"
         },
         {
           "command": "sekha.editLabel",
@@ -300,6 +463,18 @@
         },
         {
           "command": "sekha.moveFolder",
+          "when": "false"
+        },
+        {
+          "command": "sekha.addTags",
+          "when": "false"
+        },
+        {
+          "command": "sekha.removeTags",
+          "when": "false"
+        },
+        {
+          "command": "sekha.exportConversation",
           "when": "false"
         },
         {
@@ -316,6 +491,30 @@
         },
         {
           "command": "sekha.deleteConversation",
+          "when": "false"
+        },
+        {
+          "command": "sekha.batchPin",
+          "when": "false"
+        },
+        {
+          "command": "sekha.batchUnpin",
+          "when": "false"
+        },
+        {
+          "command": "sekha.batchArchive",
+          "when": "false"
+        },
+        {
+          "command": "sekha.batchDelete",
+          "when": "false"
+        },
+        {
+          "command": "sekha.batchMove",
+          "when": "false"
+        },
+        {
+          "command": "sekha.batchAddTags",
           "when": "false"
         }
       ]
