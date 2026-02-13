@@ -2,7 +2,7 @@
   "name": "sekha-vscode",
   "displayName": "Sekha Memory Controller",
   "description": "Persistent AI memory and context management for VS Code",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "publisher": "sekha-ai",
   "icon": "images/icon.png",
   "repository": {
@@ -44,6 +44,11 @@
           "default": "",
           "description": "Sekha API Key (minimum 32 characters)",
           "minLength": 32
+        },
+        "sekha.bridgeUrl": {
+          "type": "string",
+          "default": "http://localhost:5001",
+          "description": "Sekha LLM Bridge API URL (optional)"
         },
         "sekha.autoSave": {
           "type": "boolean",
@@ -90,6 +95,21 @@
         "command": "sekha.searchAndInsert",
         "title": "Sekha: Search & Insert",
         "icon": "$(combine)"
+      },
+      {
+        "command": "sekha.aiComplete",
+        "title": "Sekha: AI Complete with Memory",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "sekha.summarizeSelection",
+        "title": "Sekha: Summarize Selection",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "sekha.suggestLabels",
+        "title": "Sekha: Suggest Labels",
+        "icon": "$(tag)"
       },
       {
         "command": "sekha.refresh",
@@ -165,6 +185,16 @@
           "command": "sekha.insertContext",
           "group": "sekha",
           "when": "editorTextFocus"
+        },
+        {
+          "command": "sekha.aiComplete",
+          "group": "sekha",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "sekha.summarizeSelection",
+          "group": "sekha",
+          "when": "editorHasSelection"
         }
       ],
       "commandPalette": [
@@ -179,6 +209,15 @@
         },
         {
           "command": "sekha.insertContext"
+        },
+        {
+          "command": "sekha.aiComplete"
+        },
+        {
+          "command": "sekha.summarizeSelection"
+        },
+        {
+          "command": "sekha.suggestLabels"
         },
         {
           "command": "sekha.refresh"
@@ -207,6 +246,12 @@
         "key": "ctrl+shift+i",
         "mac": "cmd+shift+i",
         "when": "editorTextFocus"
+      },
+      {
+        "command": "sekha.aiComplete",
+        "key": "ctrl+shift+k",
+        "mac": "cmd+shift+k",
+        "when": "editorTextFocus"
       }
     ]
   },
@@ -218,6 +263,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run tests/integration",
     "lint": "eslint src --ext ts",
     "lint:fix": "eslint src --ext ts --fix",
     "package": "vsce package",
