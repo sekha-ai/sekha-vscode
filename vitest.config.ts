@@ -1,31 +1,34 @@
 import { defineConfig } from 'vitest/config';
-import path from 'path';
 
 export default defineConfig({
   test: {
     globals: true,
     environment: 'happy-dom',
+    setupFiles: ['./tests/setup.ts'],
+    include: ['tests/**/*.test.ts'],
+    exclude: [
+      'node_modules',
+      'dist',
+      'tests/integration/**',
+      'tests/e2e/**',
+    ],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html', 'lcov'],
-      include: ['src/**/*.ts'],
-      exclude: ['src/**/*.d.ts', 'src/**/*.test.ts', 'src/extension.ts'],
-      thresholds: {
-        lines: 70,
-        functions: 70,
-        branches: 70,
-        statements: 70
-      }
+      reporter: ['text', 'json', 'html', 'lcov', 'json-summary'],
+      exclude: [
+        'node_modules/',
+        'dist/',
+        'tests/',
+        '**/*.test.ts',
+        '**/*.config.ts',
+        '**/types.ts',
+        'scripts/',
+      ],
+      // Phase 5: 80% coverage threshold
+      statements: 80,
+      branches: 75,
+      functions: 80,
+      lines: 80,
     },
-    testTimeout: 10000,
-    hookTimeout: 10000,
-    // Fix: Exclude node_modules from transforms
-    exclude: ['node_modules', 'dist', 'coverage']
   },
-  resolve: {
-    alias: {
-      'vscode': path.resolve(__dirname, './tests/__mocks__/vscode.ts'),
-      '@sekha/sdk': path.resolve(__dirname, '../sekha-js-sdk/src')
-    }
-  }
 });
