@@ -1,12 +1,11 @@
 import * as vscode from 'vscode';
-import { MemoryController, Conversation } from '@sekha/sdk';
-import { Message } from '@sekha/sdk';
+import { SekhaClient, Conversation, Message } from '@sekha/sdk';
 
 export class SekhaTreeDataProvider implements vscode.TreeDataProvider<SekhaTreeItem> {
   private _onDidChangeTreeData = new vscode.EventEmitter<SekhaTreeItem | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  constructor(private memory: MemoryController) {}
+  constructor(private sekha: SekhaClient) {}
 
   refresh(): void {
     this._onDidChangeTreeData.fire(undefined);
@@ -33,11 +32,12 @@ export class SekhaTreeDataProvider implements vscode.TreeDataProvider<SekhaTreeI
   }
 
   private async getLabelNodes(): Promise<SekhaTreeItem[]> {
-    const conversations = await this.memory.listConversations();
-    const labels = [...new Set(conversations.map(c => c.label))].sort();
+    const response = await this.sekha.controller.list({ limit: 1000 });
+    const conversations = response.conversations;
+    const labels = [...new Set(conversations.map(c => c.label).filter(Boolean))].sort();
     
     return labels.map(label => new SekhaTreeItem(
-      label,
+      label || 'Unlabeled',
       vscode.TreeItemCollapsibleState.Collapsed,
       'label',
       undefined,
@@ -47,34 +47,44 @@ export class SekhaTreeDataProvider implements vscode.TreeDataProvider<SekhaTreeI
   }
 
   private async getConversationNodes(label: string): Promise<SekhaTreeItem[]> {
-    const conversations = await this.memory.listConversations({ label });
     const maxConversations = vscode.workspace
       .getConfiguration('sekha')
       .get<number>('maxConversationsInTree', 100);
     
-    return conversations
-      .slice(0, maxConversations)
-      .map(conv => new SekhaTreeItem(
-        conv.label || 'Untitled',
-        vscode.TreeItemCollapsibleState.Collapsed,
-        'conversation',
-        conv,
-        conv.id,
-        undefined,
-        new vscode.ThemeIcon(conv.status === 'pinned' ? 'pinned' : 'file-text')
-      ));
+    const response = await this.sekha.controller.list({ 
+      limit: maxConversations,
+      filter: { label }
+    });
+    
+    return response.conversations.map(conv => new SekhaTreeItem(
+      conv.label || 'Untitled',
+      vscode.TreeItemCollapsibleState.Collapsed,
+      'conversation',
+      conv,
+      conv.id,
+      undefined,
+      new vscode.ThemeIcon(conv.status === 'pinned' ? 'pinned' : 'file-text')
+    ));
   }
 
   private async getMessageNodes(conversation: Conversation): Promise<SekhaTreeItem[]> {
-    return conversation.messages.map((msg: Message, index: number) => new SekhaTreeItem(
-      `${msg.role}: ${msg.content.substring(0, 50)}${msg.content.length > 50 ? '...' : ''}`,
-      vscode.TreeItemCollapsibleState.None,
-      'message',
-      undefined,
-      undefined,
-      undefined,
-      new vscode.ThemeIcon(msg.role === 'user' ? 'account' : 'hubot')
-    ));
+    return conversation.messages.map((msg: Message, index: number) => {
+      const content = typeof msg.content === 'string' 
+        ? msg.content 
+        : JSON.stringify(msg.content);
+      
+      const preview = content.substring(0, 50) + (content.length > 50 ? '...' : '');
+      
+      return new SekhaTreeItem(
+        `${msg.role}: ${preview}`,
+        vscode.TreeItemCollapsibleState.None,
+        'message',
+        undefined,
+        undefined,
+        undefined,
+        new vscode.ThemeIcon(msg.role === 'user' ? 'account' : 'hubot')
+      );
+    });
   }
 }
 
