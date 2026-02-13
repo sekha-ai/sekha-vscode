@@ -35,7 +35,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // Initialize commands
   const commands = new Commands(sekhaClient, treeDataProvider, webviewProvider);
 
-  // Register commands
+  // Register core commands
   context.subscriptions.push(
     vscode.commands.registerCommand('sekha.saveConversation', () => 
       commands.saveConversation()
@@ -43,12 +43,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('sekha.search', () => 
       commands.search()
     ),
+    vscode.commands.registerCommand('sekha.fullTextSearch', () => 
+      commands.fullTextSearch()
+    ),
     vscode.commands.registerCommand('sekha.insertContext', () => 
       commands.insertContext()
     ),
     vscode.commands.registerCommand('sekha.searchAndInsert', () => 
       commands.searchAndInsert()
     ),
+    
+    // AI/Bridge commands
     vscode.commands.registerCommand('sekha.aiComplete', () => 
       commands.aiComplete()
     ),
@@ -58,11 +63,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('sekha.suggestLabels', () => 
       commands.suggestLabels()
     ),
-    vscode.commands.registerCommand('sekha.refresh', () => 
-      treeDataProvider.refresh()
-    ),
+    
+    // Conversation management commands
     vscode.commands.registerCommand('sekha.viewConversation', (id: string) => 
       commands.viewConversation(id)
+    ),
+    vscode.commands.registerCommand('sekha.editLabel', (item: any) => 
+      commands.editLabel(item.conversationId)
+    ),
+    vscode.commands.registerCommand('sekha.moveFolder', (item: any) => 
+      commands.moveFolder(item.conversationId)
+    ),
+    vscode.commands.registerCommand('sekha.pinConversation', (item: any) => 
+      commands.pinConversation(item.conversationId)
+    ),
+    vscode.commands.registerCommand('sekha.unpinConversation', (item: any) => 
+      commands.unpinConversation(item.conversationId)
+    ),
+    vscode.commands.registerCommand('sekha.archiveConversation', (item: any) => 
+      commands.archiveConversation(item.conversationId)
+    ),
+    vscode.commands.registerCommand('sekha.deleteConversation', (item: any) => 
+      commands.deleteConversation(item.conversationId)
+    ),
+    
+    // Utility commands
+    vscode.commands.registerCommand('sekha.showStats', () => 
+      commands.showStats()
+    ),
+    vscode.commands.registerCommand('sekha.refresh', () => 
+      treeDataProvider.refresh()
     ),
     vscode.commands.registerCommand('sekha.openSettings', () => 
       commands.openSettings()
