@@ -5,7 +5,8 @@ import {
   QueryResponse,
   Message,
   CreateConversationRequest,
-  ContextAssembleRequest
+  ContextAssembleRequest,
+  FullTextSearchResponse
 } from '@sekha/sdk';
 import { SekhaTreeDataProvider } from './treeView';
 import { WebviewProvider } from './webview';
@@ -90,7 +91,7 @@ export class Commands {
   async search(): Promise<void> {
     try {
       const query = await vscode.window.showInputBox({
-        prompt: 'Search Sekha memory',
+        prompt: 'Search Sekha memory (semantic)',
         placeHolder: 'Enter search query...',
       });
 
@@ -124,6 +125,46 @@ export class Commands {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       vscode.window.showErrorMessage(`Search failed: ${message}`);
+    }
+  }
+
+  async fullTextSearch(): Promise<void> {
+    try {
+      const query = await vscode.window.showInputBox({
+        prompt: 'Full-text search Sekha memory',
+        placeHolder: 'Enter keywords...',
+      });
+
+      if (!query) return;
+
+      const response: FullTextSearchResponse = await this.sekha.controller.fullTextSearch({
+        query,
+        limit: 10,
+      });
+      
+      if (response.results.length === 0) {
+        vscode.window.showInformationMessage('No results found');
+        return;
+      }
+
+      const items = response.results.map(r => ({
+        label: r.label || 'Untitled',
+        description: `${r.folder || '/'}`,
+        detail: r.snippet || this.extractContent(r.conversation).substring(0, 100),
+        conversationId: r.conversation_id,
+      }));
+
+      const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: 'Select conversation to view',
+      });
+
+      if (selected?.conversationId) {
+        await this.viewConversation(selected.conversationId);
+      }
+
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(`Full-text search failed: ${message}`);
     }
   }
 
@@ -213,7 +254,6 @@ export class Commands {
         return;
       }
 
-      // Get selected text or line
       let prompt = editor.document.getText(editor.selection);
       if (!prompt) {
         const line = editor.document.lineAt(editor.selection.active.line);
@@ -225,13 +265,11 @@ export class Commands {
         return;
       }
 
-      // Search for relevant context
       const response = await this.sekha.controller.query({
         query: prompt,
         limit: 3,
       });
 
-      // Build context from search results
       let contextText = '';
       if (response.results.length > 0) {
         contextText = '\n\nRelevant context from memory:\n';
@@ -240,7 +278,6 @@ export class Commands {
         });
       }
 
-      // Call Bridge for completion
       const completion = await this.sekha.bridge.complete({
         messages: [
           {
@@ -257,7 +294,6 @@ export class Commands {
 
       const aiResponse = completion.choices[0]?.message?.content || '';
 
-      // Insert response
       await editor.edit((editBuilder: vscode.TextEditorEdit) => {
         const position = editor.selection.active;
         editBuilder.insert(position, `\n\n### AI Response (with memory context)\n\n${aiResponse}\n\n`);
@@ -287,7 +323,6 @@ export class Commands {
         return;
       }
 
-      // Choose summary level
       const level = await vscode.window.showQuickPick(
         [
           { label: 'Brief', value: 'brief' },
@@ -303,7 +338,6 @@ export class Commands {
         level: level.value as 'brief' | 'detailed',
       });
 
-      // Insert summary
       await editor.edit((editBuilder: vscode.TextEditorEdit) => {
         const position = editor.selection.end;
         editBuilder.insert(
@@ -370,6 +404,141 @@ export class Commands {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       vscode.window.showErrorMessage(`Label suggestion failed: ${message}`);
+    }
+  }
+
+  async editLabel(conversationId: string): Promise<void> {
+    try {
+      const conversation = await this.sekha.controller.get(conversationId);
+      
+      const newLabel = await vscode.window.showInputBox({
+        prompt: 'Enter new label',
+        value: conversation.label,
+      });
+
+      if (!newLabel || newLabel === conversation.label) return;
+
+      await this.sekha.controller.updateLabel(conversationId, { label: newLabel });
+
+      vscode.window.showInformationMessage(`Label updated to "${newLabel}"`);
+      this.treeView.refresh();
+
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(`Failed to edit label: ${message}`);
+    }
+  }
+
+  async moveFolder(conversationId: string): Promise<void> {
+    try {
+      const conversation = await this.sekha.controller.get(conversationId);
+      
+      const newFolder = await vscode.window.showInputBox({
+        prompt: 'Enter folder path',
+        value: conversation.folder || '/',
+        placeHolder: '/vscode/archived',
+      });
+
+      if (!newFolder || newFolder === conversation.folder) return;
+
+      await this.sekha.controller.updateFolder(conversationId, { folder: newFolder });
+
+      vscode.window.showInformationMessage(`Moved to folder "${newFolder}"`);
+      this.treeView.refresh();
+
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(`Failed to move folder: ${message}`);
+    }
+  }
+
+  async pinConversation(conversationId: string): Promise<void> {
+    try {
+      await this.sekha.controller.pin(conversationId);
+
+      vscode.window.showInformationMessage('Conversation pinned');
+      this.treeView.refresh();
+
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(`Failed to pin conversation: ${message}`);
+    }
+  }
+
+  async unpinConversation(conversationId: string): Promise<void> {
+    try {
+      await this.sekha.controller.unpin(conversationId);
+
+      vscode.window.showInformationMessage('Conversation unpinned');
+      this.treeView.refresh();
+
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(`Failed to unpin conversation: ${message}`);
+    }
+  }
+
+  async archiveConversation(conversationId: string): Promise<void> {
+    try {
+      const confirm = await vscode.window.showWarningMessage(
+        'Archive this conversation?',
+        { modal: true },
+        'Archive'
+      );
+
+      if (confirm !== 'Archive') return;
+
+      await this.sekha.controller.archive(conversationId);
+
+      vscode.window.showInformationMessage('Conversation archived');
+      this.treeView.refresh();
+
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(`Failed to archive conversation: ${message}`);
+    }
+  }
+
+  async deleteConversation(conversationId: string): Promise<void> {
+    try {
+      const confirm = await vscode.window.showWarningMessage(
+        'Permanently delete this conversation? This cannot be undone.',
+        { modal: true },
+        'Delete'
+      );
+
+      if (confirm !== 'Delete') return;
+
+      await this.sekha.controller.delete(conversationId);
+
+      vscode.window.showInformationMessage('Conversation deleted');
+      this.treeView.refresh();
+
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(`Failed to delete conversation: ${message}`);
+    }
+  }
+
+  async showStats(): Promise<void> {
+    try {
+      const stats = await this.sekha.controller.count();
+
+      const message = `
+📊 Memory Statistics
+
+Total Conversations: ${stats.total}
+By Status:
+  • Active: ${stats.by_status?.active || 0}
+  • Pinned: ${stats.by_status?.pinned || 0}
+  • Archived: ${stats.by_status?.archived || 0}
+      `.trim();
+
+      vscode.window.showInformationMessage(message, { modal: true });
+
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(`Failed to load statistics: ${message}`);
     }
   }
 
