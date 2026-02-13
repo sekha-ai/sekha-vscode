@@ -31,10 +31,22 @@ vi.mock('vscode', () => ({
   ConfigurationChangeEvent: vi.fn()
 }));
 
-// Mock @sekha/sdk
+// Mock @sekha/sdk with new SekhaClient
 vi.mock('@sekha/sdk', () => ({
-  MemoryController: vi.fn(),
-  MemoryConfig: vi.fn()
+  SekhaClient: vi.fn().mockImplementation(() => ({
+    controller: {
+      create: vi.fn(),
+      get: vi.fn(),
+      list: vi.fn(),
+      query: vi.fn(),
+      assembleContext: vi.fn(),
+    },
+    bridge: {
+      complete: vi.fn(),
+      summarize: vi.fn(),
+    }
+  })),
+  SekhaConfig: vi.fn()
 }));
 
 // Fix: Mock as actual class, not factory function
@@ -47,6 +59,9 @@ class MockCommands {
   search = vi.fn();
   insertContext = vi.fn();
   searchAndInsert = vi.fn();
+  aiComplete = vi.fn();
+  summarizeSelection = vi.fn();
+  suggestLabels = vi.fn();
   viewConversation = vi.fn();
   openSettings = vi.fn();
   autoSaveConversation = vi.fn();
@@ -93,6 +108,7 @@ describe('Extension', () => {
         switch (key) {
           case 'apiUrl': return 'http://localhost:8080';
           case 'apiKey': return 'sk-'.padEnd(35, 'x');
+          case 'bridgeUrl': return 'http://localhost:5001';
           case 'autoSave': return false;
           case 'autoSaveInterval': return 5;
           default: return undefined;
@@ -134,9 +150,10 @@ describe('Extension', () => {
       );
     });
 
-    it('should register all commands', async () => {
+    it('should register all commands including new Bridge commands', async () => {
       await activate(mockContext);
 
+      // Original commands
       expect(vscode.commands.registerCommand).toHaveBeenCalledWith(
         'sekha.saveConversation',
         expect.any(Function)
@@ -153,6 +170,22 @@ describe('Extension', () => {
         'sekha.insertContext',
         expect.any(Function)
       );
+      
+      // New Bridge commands
+      expect(vscode.commands.registerCommand).toHaveBeenCalledWith(
+        'sekha.aiComplete',
+        expect.any(Function)
+      );
+      expect(vscode.commands.registerCommand).toHaveBeenCalledWith(
+        'sekha.summarizeSelection',
+        expect.any(Function)
+      );
+      expect(vscode.commands.registerCommand).toHaveBeenCalledWith(
+        'sekha.suggestLabels',
+        expect.any(Function)
+      );
+      
+      // Utility commands
       expect(vscode.commands.registerCommand).toHaveBeenCalledWith(
         'sekha.refresh',
         expect.any(Function)
@@ -214,8 +247,6 @@ describe('Extension', () => {
 
   describe('deactivate', () => {
     it('should clear auto-save timer', () => {
-      // This test needs to access the internal timer
-      // We'll spy on the global clearInterval to verify it's called
       const spy = vi.spyOn(global, 'clearInterval');
       
       // Activate with auto-save enabled

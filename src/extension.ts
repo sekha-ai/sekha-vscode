@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { MemoryController, MemoryConfig } from '@sekha/sdk';
+import { SekhaClient, SekhaConfig } from '@sekha/sdk';
 import { SekhaTreeDataProvider } from './treeView';
 import { Commands } from './commands';
 import { WebviewProvider } from './webview';
@@ -20,10 +20,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     return;
   }
 
-  const memory = createMemoryController(config);
+  const sekhaClient = createSekhaClient(config);
   
   // Initialize tree view
-  const treeDataProvider = new SekhaTreeDataProvider(memory);
+  const treeDataProvider = new SekhaTreeDataProvider(sekhaClient);
   const treeView = vscode.window.createTreeView('sekhaExplorer', {
     treeDataProvider,
     showCollapseAll: true,
@@ -33,7 +33,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const webviewProvider = new WebviewProvider(context.extensionUri);
 
   // Initialize commands
-  const commands = new Commands(memory, treeDataProvider, webviewProvider);
+  const commands = new Commands(sekhaClient, treeDataProvider, webviewProvider);
 
   // Register commands
   context.subscriptions.push(
@@ -48,6 +48,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand('sekha.searchAndInsert', () => 
       commands.searchAndInsert()
+    ),
+    vscode.commands.registerCommand('sekha.aiComplete', () => 
+      commands.aiComplete()
+    ),
+    vscode.commands.registerCommand('sekha.summarizeSelection', () => 
+      commands.summarizeSelection()
+    ),
+    vscode.commands.registerCommand('sekha.suggestLabels', () => 
+      commands.suggestLabels()
     ),
     vscode.commands.registerCommand('sekha.refresh', () => 
       treeDataProvider.refresh()
@@ -82,14 +91,15 @@ function validateConfig(config: vscode.WorkspaceConfiguration): boolean {
   return Boolean(apiUrl && apiKey && apiKey.length >= 32);
 }
 
-function createMemoryController(config: vscode.WorkspaceConfiguration): MemoryController {
-  const apiConfig: MemoryConfig = {
-    baseURL: config.get<string>('apiUrl', 'http://localhost:8080'),
+function createSekhaClient(config: vscode.WorkspaceConfiguration): SekhaClient {
+  const sekhaConfig: SekhaConfig = {
+    controllerURL: config.get<string>('apiUrl', 'http://localhost:8080'),
     apiKey: config.get<string>('apiKey', ''),
+    bridgeURL: config.get<string>('bridgeUrl'),
     timeout: 30000,
   };
   
-  return new MemoryController(apiConfig);
+  return new SekhaClient(sekhaConfig);
 }
 
 function setupAutoSave(config: vscode.WorkspaceConfiguration, commands: Commands): NodeJS.Timeout | undefined {
