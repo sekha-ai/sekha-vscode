@@ -87,6 +87,11 @@
         "icon": "$(search)"
       },
       {
+        "command": "sekha.fullTextSearch",
+        "title": "Sekha: Full Text Search",
+        "icon": "$(search)"
+      },
+      {
         "command": "sekha.insertContext",
         "title": "Sekha: Insert Context",
         "icon": "$(insert)"
@@ -118,7 +123,43 @@
       },
       {
         "command": "sekha.viewConversation",
-        "title": "Sekha: View Conversation"
+        "title": "Sekha: View Conversation",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "sekha.editLabel",
+        "title": "Sekha: Edit Label",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "sekha.moveFolder",
+        "title": "Sekha: Move to Folder",
+        "icon": "$(folder)"
+      },
+      {
+        "command": "sekha.pinConversation",
+        "title": "Sekha: Pin Conversation",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "sekha.unpinConversation",
+        "title": "Sekha: Unpin Conversation",
+        "icon": "$(pinned)"
+      },
+      {
+        "command": "sekha.archiveConversation",
+        "title": "Sekha: Archive Conversation",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "sekha.deleteConversation",
+        "title": "Sekha: Delete Conversation",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "sekha.showStats",
+        "title": "Sekha: Show Memory Statistics",
+        "icon": "$(graph)"
       },
       {
         "command": "sekha.openSettings",
@@ -150,50 +191,75 @@
         {
           "command": "sekha.refresh",
           "when": "view == sekhaExplorer",
-          "group": "navigation"
+          "group": "navigation@1"
         },
         {
           "command": "sekha.search",
           "when": "view == sekhaExplorer",
-          "group": "navigation"
+          "group": "navigation@2"
         },
         {
-          "command": "sekha.searchAndInsert",
+          "command": "sekha.showStats",
           "when": "view == sekhaExplorer",
-          "group": "navigation"
+          "group": "navigation@3"
         },
         {
           "command": "sekha.openSettings",
           "when": "view == sekhaExplorer",
-          "group": "navigation"
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
         {
           "command": "sekha.viewConversation",
           "when": "view == sekhaExplorer && viewItem == conversation",
-          "group": "inline"
+          "group": "1_view@1"
+        },
+        {
+          "command": "sekha.editLabel",
+          "when": "view == sekhaExplorer && viewItem == conversation",
+          "group": "2_edit@1"
+        },
+        {
+          "command": "sekha.moveFolder",
+          "when": "view == sekhaExplorer && viewItem == conversation",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "sekha.pinConversation",
+          "when": "view == sekhaExplorer && viewItem == conversation",
+          "group": "3_manage@1"
+        },
+        {
+          "command": "sekha.archiveConversation",
+          "when": "view == sekhaExplorer && viewItem == conversation",
+          "group": "3_manage@2"
+        },
+        {
+          "command": "sekha.deleteConversation",
+          "when": "view == sekhaExplorer && viewItem == conversation",
+          "group": "4_danger@1"
         }
       ],
       "editor/context": [
         {
           "command": "sekha.saveConversation",
-          "group": "sekha",
+          "group": "sekha@1",
           "when": "editorTextFocus"
         },
         {
           "command": "sekha.insertContext",
-          "group": "sekha",
+          "group": "sekha@2",
           "when": "editorTextFocus"
         },
         {
           "command": "sekha.aiComplete",
-          "group": "sekha",
+          "group": "sekha@3",
           "when": "editorTextFocus"
         },
         {
           "command": "sekha.summarizeSelection",
-          "group": "sekha",
+          "group": "sekha@4",
           "when": "editorHasSelection"
         }
       ],
@@ -203,6 +269,9 @@
         },
         {
           "command": "sekha.search"
+        },
+        {
+          "command": "sekha.fullTextSearch"
         },
         {
           "command": "sekha.searchAndInsert"
@@ -220,7 +289,34 @@
           "command": "sekha.suggestLabels"
         },
         {
+          "command": "sekha.showStats"
+        },
+        {
           "command": "sekha.refresh"
+        },
+        {
+          "command": "sekha.editLabel",
+          "when": "false"
+        },
+        {
+          "command": "sekha.moveFolder",
+          "when": "false"
+        },
+        {
+          "command": "sekha.pinConversation",
+          "when": "false"
+        },
+        {
+          "command": "sekha.unpinConversation",
+          "when": "false"
+        },
+        {
+          "command": "sekha.archiveConversation",
+          "when": "false"
+        },
+        {
+          "command": "sekha.deleteConversation",
+          "when": "false"
         }
       ]
     },
